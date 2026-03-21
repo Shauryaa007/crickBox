@@ -37,12 +37,12 @@ export default function Navbar() {
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                onClick={signIn}
-                                className="btn-primary text-sm px-4 py-2"
-                            >
-                                Sign In
-                            </button>
+                            // <button
+                            //     onClick={signIn}
+                            //     className="btn-primary text-sm px-4 py-2"
+                            // >
+                            //     Sign In
+                            // </button>
                         )}
                     </div>
                 </div>

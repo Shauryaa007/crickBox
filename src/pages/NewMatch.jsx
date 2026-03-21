@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFirestore } from '../hooks/useFirestore';
 import TeamSelector from '../components/match/TeamSelector';
+import Modal from '../components/common/Modal';
 
 export default function NewMatch() {
     const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function NewMatch() {
     const [openingBatsman1, setOpeningBatsman1] = useState('');
     const [openingBatsman2, setOpeningBatsman2] = useState('');
     const [openingBowler, setOpeningBowler] = useState('');
+    const [manualOversModalOpen, setManualOversModalOpen] = useState(false);
 
     useEffect(() => {
         fetchPlayers(user?.uid);
@@ -142,12 +144,12 @@ export default function NewMatch() {
                         <label className="block text-sm font-medium text-surface-300 mb-3">
                             Number of Overs
                         </label>
-                        <div className="flex items-center gap-4">
-                            {[2, 3, 5, 8, 10, 15, 20].map(o => (
+                        <div className="grid grid-cols-4 gap-2">
+                            {[2, 3, 5, 10, 15, 20].map(o => (
                                 <button
                                     key={o}
                                     onClick={() => setTotalOvers(o)}
-                                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all
+                                    className={`py-3 rounded-xl text-sm font-bold transition-all
                     ${totalOvers === o
                                             ? 'bg-primary-600 text-white shadow-lg'
                                             : 'bg-surface-700 text-surface-400 hover:text-white'}`}
@@ -155,18 +157,58 @@ export default function NewMatch() {
                                     {o}
                                 </button>
                             ))}
-                        </div>
-                        <div className="mt-3">
-                            <input
-                                type="number"
-                                value={totalOvers}
-                                onChange={(e) => setTotalOvers(Math.max(1, parseInt(e.target.value) || 1))}
-                                className="input text-sm"
-                                placeholder="Custom overs"
-                                min={1}
-                            />
+                            <button
+                                onClick={() => setManualOversModalOpen(true)}
+                                className={`py-3 rounded-xl text-sm font-bold transition-all
+                    ${![2, 3, 5, 10, 15, 20].includes(totalOvers)
+                                        ? 'bg-primary-600 text-white shadow-lg'
+                                        : 'bg-surface-700 text-surface-400 hover:text-white'}`}
+                            >
+                                Manual
+                            </button>
                         </div>
                     </div>
+
+                    {/* Manual Overs Modal */}
+                    <Modal
+                        isOpen={manualOversModalOpen}
+                        onClose={() => setManualOversModalOpen(false)}
+                        title="Set Custom Overs"
+                    >
+                        <div className="space-y-6 py-2">
+                            <div className="flex items-center justify-center gap-6">
+                                <button
+                                    onClick={() => setTotalOvers(Math.max(1, totalOvers - 1))}
+                                    className="w-14 h-14 rounded-full bg-surface-800 border border-surface-700 flex items-center justify-center text-2xl font-bold text-white hover:bg-surface-700 active:scale-95 transition-all shadow-lg"
+                                >
+                                    −
+                                </button>
+                                <div className="text-center">
+                                    <input
+                                        type="number"
+                                        value={totalOvers}
+                                        onChange={(e) => setTotalOvers(Math.max(1, parseInt(e.target.value) || 1))}
+                                        className="w-24 bg-transparent border-b-2 border-primary-500 text-5xl font-black text-center py-2 focus:outline-none text-white appearance-none"
+                                        style={{ MozAppearance: 'textfield' }}
+                                        autoFocus
+                                    />
+                                    <p className="text-[10px] text-surface-500 mt-2 uppercase tracking-[0.2em]">Overs</p>
+                                </div>
+                                <button
+                                    onClick={() => setTotalOvers(totalOvers + 1)}
+                                    className="w-14 h-14 rounded-full bg-surface-800 border border-surface-700 flex items-center justify-center text-2xl font-bold text-white hover:bg-surface-700 active:scale-95 transition-all shadow-lg"
+                                >
+                                    +
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => setManualOversModalOpen(false)}
+                                className="btn-primary w-full py-4 text-lg font-black tracking-wide"
+                            >
+                                DONE
+                            </button>
+                        </div>
+                    </Modal>
 
                     {/* Toss */}
                     <div className="card space-y-3">

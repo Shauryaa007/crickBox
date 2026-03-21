@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFirestore } from '../hooks/useFirestore';
-import { calculateStrikeRate, calculateAverage } from '../lib/statsCalculator';
+import { calculateStrikeRate, calculateAverage, calculateBowlingAverage, calculateEconomy } from '../lib/statsCalculator';
 
 export default function PlayerProfile() {
     const { id } = useParams();
@@ -27,12 +27,14 @@ export default function PlayerProfile() {
 
     const stats = [
         { label: 'Matches', value: player.matchesPlayed || 0, color: 'text-white', icon: '🏏' },
+        { label: 'Innings', value: player.innings || 0, color: 'text-surface-300', icon: '🏟️' },
         { label: 'Runs', value: player.runsScored || 0, color: 'text-primary-400', icon: '🏃' },
-        { label: 'Best Score', value: player.bestScore || 0, color: 'text-amber-400', icon: '⭐' },
-        { label: "6's", value: player.sixes || 0, color: 'text-primary-300', icon: '6️⃣' },
-        { label: "4's", value: player.fours || 0, color: 'text-blue-400', icon: '4️⃣' },
+        { label: 'Avg', value: calculateAverage(player.runsScored || 0, player.innings || 0, player.notOuts || 0), color: 'text-amber-400', icon: '📈' },
+        { label: 'SR', value: calculateStrikeRate(player.runsScored || 0, player.ballsFaced || 0), color: 'text-blue-400', icon: '⚡' },
         { label: 'Wickets', value: player.wicketsTaken || 0, color: 'text-red-400', icon: '🎳' },
-        { label: 'Best Wickets', value: player.bestWickets || 0, color: 'text-orange-400', icon: '🔥' },
+        { label: 'Econ', value: calculateEconomy(player.runsConceded || 0, player.ballsBowled || 0), color: 'text-orange-400', icon: '📉' },
+        { label: 'Best Score', value: player.bestScore || 0, color: 'text-amber-300', icon: '⭐' },
+        { label: 'Best Wkts', value: player.bestWickets ? `${player.bestWickets}/${player.bestWicketsRuns || 0}` : '0', color: 'text-red-300', icon: '🔥' },
     ];
 
     return (

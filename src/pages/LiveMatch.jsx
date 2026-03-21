@@ -37,6 +37,8 @@ function LiveMatchInner({ matchDoc, players }) {
                         currentState: matchState,
                         history: history.slice(-50), // Keep last 50 for undo
                         status: matchState.matchStatus === 'completed' ? 'completed' : 'live',
+                        teamA: { name: matchState.teamAName, playerIds: matchState.teamAPlayerIds },
+                        teamB: { name: matchState.teamBName, playerIds: matchState.teamBPlayerIds },
                     });
                 } catch (e) {
                     console.error('Auto-save failed:', e);
@@ -66,11 +68,38 @@ function LiveMatchInner({ matchDoc, players }) {
     const updatePlayerStats = async () => {
         try {
             const allPlayerIds = [...matchState.teamAPlayerIds, ...matchState.teamBPlayerIds];
+            
+            // Get stats from both innings
+            const fBat = matchState.firstInningsBattingStats || {};
+            const fBowl = matchState.firstInningsBowlingStats || {};
+            const sBat = matchState.battingStats || {};
+            const sBowl = matchState.bowlingStats || {};
+
             for (const pid of allPlayerIds) {
                 const player = await getPlayer(pid);
                 if (player) {
-                    const batting = matchState.battingStats[pid] || null;
-                    const bowling = matchState.bowlingStats[pid] || null;
+                    // Combine batting stats if they participated in either innings
+                    let batting = null;
+                    if (fBat[pid] || sBat[pid]) {
+                        batting = {
+                            runs: (fBat[pid]?.runs || 0) + (sBat[pid]?.runs || 0),
+                            balls: (fBat[pid]?.balls || 0) + (sBat[pid]?.balls || 0),
+                            fours: (fBat[pid]?.fours || 0) + (sBat[pid]?.fours || 0),
+                            sixes: (fBat[pid]?.sixes || 0) + (sBat[pid]?.sixes || 0),
+                            isOut: (fBat[pid]?.isOut || false) || (sBat[pid]?.isOut || false),
+                        };
+                    }
+
+                    // Combine bowling stats if they participated in either innings
+                    let bowling = null;
+                    if (fBowl[pid] || sBowl[pid]) {
+                        bowling = {
+                            wickets: (fBowl[pid]?.wickets || 0) + (sBowl[pid]?.wickets || 0),
+                            runs: (fBowl[pid]?.runs || 0) + (sBowl[pid]?.runs || 0),
+                            balls: (fBowl[pid]?.balls || 0) + (sBowl[pid]?.balls || 0),
+                        };
+                    }
+
                     const updated = mergeMatchStatsIntoPlayer(player, batting, bowling);
                     await updatePlayer(pid, updated);
                 }

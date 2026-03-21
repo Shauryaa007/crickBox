@@ -1,15 +1,33 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFirestore } from '../hooks/useFirestore';
 import { getOversString } from '../lib/matchEngine';
 
 export default function MatchHistory() {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const { documents: matches, loading, fetchAll } = useFirestore('matches');
 
     useEffect(() => {
         fetchAll(user?.uid);
     }, [user]);
+
+    const getTeamAName = (match) => {
+        return match.currentState?.teamAName || match.teamA?.name || 'Team A';
+    };
+
+    const getTeamBName = (match) => {
+        return match.currentState?.teamBName || match.teamB?.name || 'Team B';
+    };
+
+    const handleMatchClick = (match) => {
+        if (match.status === 'completed') {
+            navigate(`/match-details/${match.id}`);
+        } else if (match.status === 'live') {
+            navigate(`/match/${match.id}`);
+        }
+    };
 
     return (
         <div className="min-h-screen pt-20 pb-24 px-4 max-w-lg mx-auto">
@@ -35,9 +53,20 @@ export default function MatchHistory() {
                         const state = match.currentState;
                         const isLive = match.status === 'live';
                         const isCompleted = match.status === 'completed';
+                        const teamAName = getTeamAName(match);
+                        const teamBName = getTeamBName(match);
+
+                        // Determine scores for both teams
+                        const firstBatIsA = match.firstBattingTeam === 'A';
+                        const firstBattingName = firstBatIsA ? teamAName : teamBName;
+                        const secondBattingName = firstBatIsA ? teamBName : teamAName;
 
                         return (
-                            <div key={match.id} className="card animate-fade-in">
+                            <div
+                                key={match.id}
+                                className={`card animate-fade-in ${isCompleted ? 'cursor-pointer hover:ring-1 hover:ring-primary-500/40 transition-all' : isLive ? 'cursor-pointer hover:ring-1 hover:ring-red-500/40 transition-all' : ''}`}
+                                onClick={() => handleMatchClick(match)}
+                            >
                                 {/* Status bar */}
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
@@ -63,13 +92,14 @@ export default function MatchHistory() {
                                     )}
                                 </div>
 
-                                {/* Teams */}
+                                {/* Teams & Scores */}
                                 <div className="space-y-2">
+                                    {/* First batting team */}
                                     <div className="flex items-center justify-between">
                                         <span className="font-semibold text-white">
-                                            {match.teamA?.name || 'Team A'}
+                                            {firstBattingName}
                                         </span>
-                                        {state?.firstInningsScore && match.firstBattingTeam === 'A' && (
+                                        {state?.firstInningsScore && (
                                             <span className="font-bold text-white">
                                                 {state.firstInningsScore.runs}/{state.firstInningsScore.wickets}
                                                 <span className="text-xs text-surface-400 ml-1">
@@ -77,21 +107,17 @@ export default function MatchHistory() {
                                                 </span>
                                             </span>
                                         )}
-                                        {state?.battingTeam === 'A' && state?.matchStatus !== 'live' && !state?.firstInningsScore && (
-                                            <span className="font-bold text-white">
-                                                {state?.runs || 0}/{state?.wickets || 0}
-                                            </span>
-                                        )}
                                     </div>
+                                    {/* Second batting team */}
                                     <div className="flex items-center justify-between">
                                         <span className="font-semibold text-white">
-                                            {match.teamB?.name || 'Team B'}
+                                            {secondBattingName}
                                         </span>
-                                        {state?.firstInningsScore && match.firstBattingTeam === 'B' && (
+                                        {isCompleted && state?.innings === 2 && (
                                             <span className="font-bold text-white">
-                                                {state.firstInningsScore.runs}/{state.firstInningsScore.wickets}
+                                                {state.runs}/{state.wickets}
                                                 <span className="text-xs text-surface-400 ml-1">
-                                                    ({getOversString(state.firstInningsScore.balls)})
+                                                    ({getOversString(state.balls)})
                                                 </span>
                                             </span>
                                         )}
@@ -104,6 +130,13 @@ export default function MatchHistory() {
                                         <p className="text-sm font-semibold text-primary-400">
                                             🏆 {state.result}
                                         </p>
+                                    </div>
+                                )}
+
+                                {/* Click hint for completed */}
+                                {isCompleted && (
+                                    <div className="mt-2 text-[10px] text-surface-500 text-right">
+                                        Tap for full scorecard →
                                     </div>
                                 )}
                             </div>

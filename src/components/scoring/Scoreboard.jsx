@@ -130,26 +130,32 @@ export default function Scoreboard({ players }) {
                             : '0'}
                     </div>
                 </div>
-                {/* Non-striker */}
-                <div className="grid grid-cols-5 items-center py-2 px-1">
-                    <div className="col-span-2 flex items-center gap-1.5 min-w-0">
-                        <span className="text-surface-500 text-xs">🏏</span>
-                        <span className="text-sm text-surface-300 truncate">
-                            {getPlayerName(matchState.nonStrikerId)}
-                        </span>
+                {/* Non-striker (hidden in last man scenario) */}
+                {matchState.nonStrikerId ? (
+                    <div className="grid grid-cols-5 items-center py-2 px-1">
+                        <div className="col-span-2 flex items-center gap-1.5 min-w-0">
+                            <span className="text-surface-500 text-xs">🏏</span>
+                            <span className="text-sm text-surface-300 truncate">
+                                {getPlayerName(matchState.nonStrikerId)}
+                            </span>
+                        </div>
+                        <div className="text-center text-sm text-surface-300">
+                            {nonStriker?.runs || 0}
+                        </div>
+                        <div className="text-center text-sm text-surface-400">
+                            {nonStriker?.balls || 0}
+                        </div>
+                        <div className="text-center text-sm text-surface-400">
+                            {nonStriker?.balls > 0
+                                ? ((nonStriker.runs / nonStriker.balls) * 100).toFixed(0)
+                                : '0'}
+                        </div>
                     </div>
-                    <div className="text-center text-sm text-surface-300">
-                        {nonStriker?.runs || 0}
+                ) : (
+                    <div className="py-2 px-1 text-xs text-amber-400 font-semibold">
+                        ⚡ Last Man Batting
                     </div>
-                    <div className="text-center text-sm text-surface-400">
-                        {nonStriker?.balls || 0}
-                    </div>
-                    <div className="text-center text-sm text-surface-400">
-                        {nonStriker?.balls > 0
-                            ? ((nonStriker.runs / nonStriker.balls) * 100).toFixed(0)
-                            : '0'}
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* Bowler info */}

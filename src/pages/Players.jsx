@@ -6,7 +6,7 @@ import PlayerForm from '../components/players/PlayerForm';
 
 export default function Players() {
     const { user } = useAuth();
-    const { documents: players, loading, error, fetchAll, add, update, remove } = useFirestore('players');
+    const { documents: players, loading, error, fetchAll, add, update } = useFirestore('players');
     const [showForm, setShowForm] = useState(false);
     const [editingPlayer, setEditingPlayer] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -27,17 +27,6 @@ export default function Players() {
         } catch (err) {
             // Error is already set in useFirestore hook
             console.error('Save failed:', err.message);
-        }
-    };
-
-    const handleDelete = async (id) => {
-        if (window.confirm('Delete this player?')) {
-            try {
-                await remove(id);
-                await fetchAll(user?.uid);
-            } catch (err) {
-                console.error('Delete failed:', err.message);
-            }
         }
     };
 
@@ -121,7 +110,6 @@ export default function Players() {
                             key={player.id}
                             player={player}
                             onEdit={handleEdit}
-                            onDelete={handleDelete}
                         />
                     ))}
                 </div>

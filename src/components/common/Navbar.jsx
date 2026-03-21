@@ -8,6 +8,7 @@ export default function Navbar() {
     const navItems = [
         { path: '/', label: '🏠', title: 'Home' },
         { path: '/players', label: '👥', title: 'Players' },
+        { path: '/rankings', label: '🏆', title: 'Rankings' },
         { path: '/history', label: '📊', title: 'History' },
     ];
 

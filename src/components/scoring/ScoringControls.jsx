@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMatch } from '../../context/MatchContext';
 import Modal from '../common/Modal';
 
@@ -11,6 +11,7 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
     const [wicketModalOpen, setWicketModalOpen] = useState(false);
     const [bowlerModalOpen, setBowlerModalOpen] = useState(false);
     const [batsmanModalOpen, setBatsmanModalOpen] = useState(false);
+    const [powerplayAskOpen, setPowerplayAskOpen] = useState(false);
 
     const getPlayerName = (id) => {
         const p = players.find(pl => pl.id === id);
@@ -34,12 +35,14 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
     const handleWicketConfirm = (outBatsmanId, newBatsmanId) => {
         scoreWicket(outBatsmanId, newBatsmanId);
         setWicketModalOpen(false);
-
-        // Check if bowler change needed after this ball
-        if ((matchState.balls + 1) % 6 === 0) {
-            setTimeout(() => setBowlerModalOpen(true), 300);
-        }
     };
+
+    // Use Effect to handle bowler change modal automatically
+    useEffect(() => {
+        if (matchState.needsBowlerChange && !bowlerModalOpen && matchState.matchStatus === 'live') {
+            setBowlerModalOpen(true);
+        }
+    }, [matchState.needsBowlerChange, matchState.matchStatus]);
 
     // Handle bowler selection
     const handleBowlerSelect = (bowlerId) => {
@@ -55,14 +58,12 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
             needsBowlerChange: false,
         });
         setBowlerModalOpen(false);
+        // After bowler is selected, ask for powerplay
+        setTimeout(() => setPowerplayAskOpen(true), 300);
     };
 
     const handleRun = (runs) => {
         scoreRun(runs);
-        // Check for over complete
-        if ((matchState.balls + 1) % 6 === 0) {
-            setTimeout(() => setBowlerModalOpen(true), 300);
-        }
     };
 
     const isMatchOver = matchState.matchStatus === 'completed' || matchState.matchStatus === 'innings_break';
@@ -164,18 +165,20 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
                     <div className="space-y-2">
                         <h4 className="text-sm font-medium text-surface-300">Who got out?</h4>
                         <div className="grid grid-cols-1 gap-2">
-                            {[matchState.currentBatsmanId, matchState.nonStrikerId].map(id => (
+                            {/* Show both batsmen if non-striker exists, else only striker (last man) */}
+                            {(matchState.nonStrikerId
+                                ? [matchState.currentBatsmanId, matchState.nonStrikerId]
+                                : [matchState.currentBatsmanId]
+                            ).filter(Boolean).map(id => (
                                 <button
                                     key={id}
                                     onClick={() => {
                                         if (availableBatsmen.length > 0) {
-                                            // Show batsman selection
-                                            const newBatsmanId = null; // Will be set in next step
                                             setWicketModalOpen(false);
-                                            // Store outBatsmanId temporarily and open new batsman modal
                                             window._tempOutBatsman = id;
                                             setTimeout(() => setBatsmanModalOpen(true), 200);
                                         } else {
+                                            // No batsmen left (last man out or all out)
                                             handleWicketConfirm(id, null);
                                         }
                                     }}
@@ -191,7 +194,9 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
                                             </span>
                                         </div>
                                         {id === matchState.currentBatsmanId && (
-                                            <span className="text-xs text-primary-400">striker</span>
+                                            <span className="text-xs text-primary-400">
+                                                {matchState.isLastMan ? 'last man' : 'striker'}
+                                            </span>
                                         )}
                                     </div>
                                 </button>
@@ -229,7 +234,7 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
             {/* Bowler Change Modal */}
             <Modal
                 isOpen={bowlerModalOpen}
-                onClose={() => setBowlerModalOpen(false)}
+                onClose={() => { }} // Force selection
                 title="Select New Bowler"
             >
                 <div className="space-y-2">
@@ -252,6 +257,39 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
                             </button>
                         );
                     })}
+                </div>
+            </Modal>
+
+            {/* Powerplay Ask Modal */}
+            <Modal
+                isOpen={powerplayAskOpen}
+                onClose={() => setPowerplayAskOpen(false)}
+                title="⚡ Powerplay"
+            >
+                <div className="text-center space-y-4">
+                    <div className="text-4xl mb-2">⚡</div>
+                    <p className="text-white font-bold">Enable Powerplay for this over?</p>
+                    <p className="text-xs text-surface-400">Runs will be doubled during Powerplay!</p>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => {
+                                if (!matchState.isPowerplay) togglePowerplay();
+                                setPowerplayAskOpen(false);
+                            }}
+                            className="btn-primary flex-1 py-3"
+                        >
+                            Yes
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (matchState.isPowerplay) togglePowerplay();
+                                setPowerplayAskOpen(false);
+                            }}
+                            className="btn-secondary flex-1 py-3"
+                        >
+                            No
+                        </button>
+                    </div>
                 </div>
             </Modal>
         </div>

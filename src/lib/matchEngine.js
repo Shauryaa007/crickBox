@@ -41,6 +41,8 @@ function shouldSwapStrike(runs) {
 }
 
 function swapStrike(state) {
+    // No swap if last man is batting alone
+    if (!state.nonStrikerId) return;
     const temp = state.currentBatsmanId;
     state.currentBatsmanId = state.nonStrikerId;
     state.nonStrikerId = temp;
@@ -55,10 +57,12 @@ function isInningsComplete(state) {
     const totalPlayers = state.battingTeam === 'A'
         ? state.teamAPlayerIds.length
         : state.teamBPlayerIds.length;
-    const maxWickets = totalPlayers - 1;
 
+    // All overs bowled
     if (state.balls >= totalBalls) return true;
-    if (state.wickets >= maxWickets) return true;
+
+    // All out (last man rule: innings ends only when ALL players are out)
+    if (state.wickets >= totalPlayers) return true;
 
     // Second innings: target reached
     if (state.innings === 2 && state.target !== null && state.runs >= state.target) {
@@ -77,11 +81,32 @@ function addBallToOver(state, result) {
     state.currentOverBalls.push(result);
 }
 
+function addToBallLog(state, { type, runs, actualRuns, batsmanId, bowlerId, result, isExtra = false }) {
+    if (!state.ballLog) state.ballLog = [];
+    state.ballLog.push({
+        innings: state.innings,
+        over: Math.floor(state.balls / 6),  // current over number (0-indexed)
+        ballInOver: state.balls % 6,        // ball within the over
+        type,
+        runs,
+        actualRuns,
+        batsmanId,
+        bowlerId,
+        result,
+        isPowerplay: state.isPowerplay,
+        isExtra,
+        totalScore: state.runs,
+        totalWickets: state.wickets,
+        timestamp: Date.now(),
+    });
+}
+
 function checkAndHandleOverComplete(state) {
     if (isOverComplete(state)) {
         swapStrike(state); // swap at end of over
         state.needsBowlerChange = true;
         state.currentOverBalls = [];
+        state.isPowerplay = false; // Reset powerplay at start of each over
     }
 }
 
@@ -95,19 +120,22 @@ function checkAndHandleInningsComplete(state) {
                 wickets: state.wickets,
                 balls: state.balls,
             };
+            state.firstInningsBattingStats = deepClone(state.battingStats);
+            state.firstInningsBowlingStats = deepClone(state.bowlingStats);
         } else {
             state.matchStatus = 'completed';
             const totalPlayers = state.battingTeam === 'A'
                 ? state.teamAPlayerIds.length
                 : state.teamBPlayerIds.length;
-            const maxWickets = totalPlayers - 1;
 
             if (state.runs >= state.target) {
-                const wicketsRemaining = maxWickets - state.wickets;
-                state.result = `${state.battingTeam === 'A' ? 'Team A' : 'Team B'} won by ${wicketsRemaining} wickets`;
+                const wicketsRemaining = totalPlayers - state.wickets;
+                const winnerName = state.battingTeam === 'A' ? state.teamAName : state.teamBName;
+                state.result = `${winnerName} won by ${wicketsRemaining} wickets`;
             } else {
                 const runDiff = state.target - 1 - state.runs;
-                state.result = `${state.battingTeam === 'A' ? 'Team B' : 'Team A'} won by ${runDiff} runs`;
+                const winnerName = state.battingTeam === 'A' ? state.teamBName : state.teamAName;
+                state.result = `${winnerName} won by ${runDiff} runs`;
             }
         }
     }
@@ -167,7 +195,12 @@ export function applyAction(currentState, action) {
             updateBattingStats(state, state.currentBatsmanId, actualRuns, isFour, isSix);
             updateBowlingStats(state, state.currentBowlerId, actualRuns, false, false, false);
 
-            addBallToOver(state, isSix ? '6' : isFour ? '4' : rawRuns === 0 ? '•' : String(rawRuns));
+            const runDisplay = isSix ? '6' : isFour ? '4' : rawRuns === 0 ? '•' : String(rawRuns);
+            addBallToOver(state, runDisplay);
+            addToBallLog(state, {
+                type: 'RUN', runs: rawRuns, actualRuns, batsmanId: state.currentBatsmanId,
+                bowlerId: state.currentBowlerId, result: runDisplay,
+            });
 
             if (shouldSwapStrike(rawRuns)) {
                 swapStrike(state);
@@ -180,7 +213,7 @@ export function applyAction(currentState, action) {
 
         case ACTION_TYPES.WICKET: {
             const powerplayDeduction = state.isPowerplay ? 5 : 0;
-            state.runs = Math.max(0, state.runs - powerplayDeduction);
+            state.runs = state.runs - powerplayDeduction;
             state.wickets += 1;
             state.balls += 1;
 
@@ -199,19 +232,32 @@ export function applyAction(currentState, action) {
             updateBowlingStats(state, state.currentBowlerId, -powerplayDeduction, true, false, false);
 
             addBallToOver(state, 'W');
+            addToBallLog(state, {
+                type: 'WICKET', runs: 0, actualRuns: -powerplayDeduction, batsmanId: outBatsmanId,
+                bowlerId: state.currentBowlerId, result: 'W',
+            });
 
-            // Need new batsman
+            // Need new batsman or apply last man rule
             const totalPlayers = state.battingTeam === 'A'
                 ? state.teamAPlayerIds.length
                 : state.teamBPlayerIds.length;
             if (state.wickets < totalPlayers - 1) {
+                // Still have batsmen available — pick a new one
                 state.needsNewBatsman = true;
-                // If the out batsman was the striker, replace striker
                 if (outBatsmanId === state.currentBatsmanId) {
                     state.currentBatsmanId = action.payload.newBatsmanId || null;
                 } else {
                     state.nonStrikerId = action.payload.newBatsmanId || null;
                 }
+            } else if (state.wickets === totalPlayers - 1) {
+                // Last man rule: one batsman remains, they bat alone
+                state.isLastMan = true;
+                if (outBatsmanId === state.currentBatsmanId) {
+                    // Non-striker survives, becomes lone striker
+                    state.currentBatsmanId = state.nonStrikerId;
+                }
+                // No non-striker anymore
+                state.nonStrikerId = null;
             }
 
             checkAndHandleOverComplete(state);
@@ -233,7 +279,12 @@ export function applyAction(currentState, action) {
             state.battingStats[state.currentBatsmanId].balls -= 1;
             updateBowlingStats(state, state.currentBowlerId, actualRuns, false, true, false);
 
-            addBallToOver(state, `NB+${extraRuns}`);
+            const nbDisplay = `NB+${extraRuns}`;
+            addBallToOver(state, nbDisplay);
+            addToBallLog(state, {
+                type: 'NO_BALL', runs: totalRuns, actualRuns, batsmanId: state.currentBatsmanId,
+                bowlerId: state.currentBowlerId, result: nbDisplay, isExtra: true,
+            });
 
             if (shouldSwapStrike(extraRuns)) {
                 swapStrike(state);
@@ -252,7 +303,12 @@ export function applyAction(currentState, action) {
 
             updateBowlingStats(state, state.currentBowlerId, actualRuns, false, false, true);
 
-            addBallToOver(state, extraRuns > 0 ? `WD+${extraRuns}` : 'WD');
+            const wdDisplay = extraRuns > 0 ? `WD+${extraRuns}` : 'WD';
+            addBallToOver(state, wdDisplay);
+            addToBallLog(state, {
+                type: 'WIDE', runs: totalRuns, actualRuns, batsmanId: state.currentBatsmanId,
+                bowlerId: state.currentBowlerId, result: wdDisplay, isExtra: true,
+            });
 
             if (shouldSwapStrike(extraRuns)) {
                 swapStrike(state);
@@ -311,6 +367,7 @@ export function createInitialState({
         battingStats,
         bowlingStats,
         currentOverBalls: [],
+        ballLog: [],
         teamAPlayerIds,
         teamBPlayerIds,
         teamAName,
@@ -319,10 +376,13 @@ export function createInitialState({
         bowlingTeam: 'B',
         target: null,
         firstInningsScore: null,
+        firstInningsBattingStats: null,
+        firstInningsBowlingStats: null,
         matchStatus: 'live',
         result: null,
         needsBowlerChange: false,
         needsNewBatsman: false,
+        isLastMan: false,
     };
 }
 
@@ -360,12 +420,16 @@ export function createSecondInningsState(prevState, {
         battingStats,
         bowlingStats,
         currentOverBalls: [],
+        ballLog: prevState.ballLog || [],
+        firstInningsBattingStats: prevState.battingStats,
+        firstInningsBowlingStats: prevState.bowlingStats,
         battingTeam: prevState.bowlingTeam,
         bowlingTeam: prevState.battingTeam,
         matchStatus: 'live',
         result: null,
         needsBowlerChange: false,
         needsNewBatsman: false,
+        isLastMan: false,
     };
 }
 

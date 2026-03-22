@@ -36,6 +36,9 @@ function LiveMatchInner({ matchDoc, players, user }) {
 
     // Save match state to Firestore periodically
     useEffect(() => {
+        // Only admin should save state
+        if (!isAdmin) return;
+        
         const save = async () => {
             if (id && matchState) {
                 try {
@@ -53,7 +56,14 @@ function LiveMatchInner({ matchDoc, players, user }) {
         };
         const timer = setTimeout(save, 1000); // Debounce saves
         return () => clearTimeout(timer);
-    }, [matchState, history]);
+    }, [matchState, history, id, isAdmin, updateMatch]);
+
+    // Handle real-time updates for spectators
+    useEffect(() => {
+        if (!isAdmin && matchDoc?.currentState) {
+            updateCurrent(matchDoc.currentState);
+        }
+    }, [matchDoc?.currentState, isAdmin, updateCurrent]);
 
     // Handle innings break
     useEffect(() => {
@@ -421,7 +431,7 @@ function LiveMatchInner({ matchDoc, players, user }) {
 export default function LiveMatch() {
     const { id } = useParams();
     const { user } = useAuth();
-    const { getById, loading } = useFirestore('matches');
+    const { subscribeToDoc, loading } = useFirestore('matches');
     const { documents: players, fetchAll: fetchPlayers } = useFirestore('players');
     const [matchDoc, setMatchDoc] = useState(null);
     const [initialState, setInitialState] = useState(null);
@@ -431,35 +441,38 @@ export default function LiveMatch() {
     }, [fetchPlayers]);
 
     useEffect(() => {
-        const load = async () => {
-            const doc = await getById(id);
+        if (!id) return;
+        const unsubscribe = subscribeToDoc(id, (doc) => {
             if (doc) {
                 setMatchDoc(doc);
-                // Restore state or create new
-                if (doc.currentState) {
-                    setInitialState(doc.currentState);
-                } else {
-                    const state = createInitialState({
-                        teamAPlayerIds: doc.teamA.playerIds,
-                        teamBPlayerIds: doc.teamB.playerIds,
-                        openingBatsman1Id: doc.openingBatsman1,
-                        openingBatsman2Id: doc.openingBatsman2,
-                        openingBowlerId: doc.openingBowler,
-                        totalOvers: doc.overs,
-                        teamAName: doc.teamA.name,
-                        teamBName: doc.teamB.name,
-                    });
-                    // Determine batting order from toss
-                    if (doc.firstBattingTeam === 'B') {
-                        state.battingTeam = 'B';
-                        state.bowlingTeam = 'A';
+                // Restore state or create new ONLY IF not already set
+                setInitialState(prev => {
+                    if (prev) return prev;
+                    if (doc.currentState) {
+                        return doc.currentState;
+                    } else {
+                        const state = createInitialState({
+                            teamAPlayerIds: doc.teamA.playerIds,
+                            teamBPlayerIds: doc.teamB.playerIds,
+                            openingBatsman1Id: doc.openingBatsman1,
+                            openingBatsman2Id: doc.openingBatsman2,
+                            openingBowlerId: doc.openingBowler,
+                            totalOvers: doc.overs,
+                            teamAName: doc.teamA.name,
+                            teamBName: doc.teamB.name,
+                        });
+                        // Determine batting order from toss
+                        if (doc.firstBattingTeam === 'B') {
+                            state.battingTeam = 'B';
+                            state.bowlingTeam = 'A';
+                        }
+                        return state;
                     }
-                    setInitialState(state);
-                }
+                });
             }
-        };
-        if (id) load();
-    }, [id]);
+        });
+        return () => unsubscribe();
+    }, [id, subscribeToDoc]);
 
     if (!initialState || players.length === 0) {
         return (

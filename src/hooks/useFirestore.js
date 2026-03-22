@@ -3,7 +3,7 @@ import { db } from '../lib/firebase';
 import {
     collection, doc, addDoc, updateDoc, deleteDoc,
     getDocs, getDoc, query, where, orderBy,
-    serverTimestamp,
+    serverTimestamp, onSnapshot
 } from 'firebase/firestore';
 
 // Helper: wrap a promise with a timeout
@@ -114,5 +114,27 @@ export function useFirestore(collectionName) {
         }
     }, [collectionName]);
 
-    return { documents, loading, error, fetchAll, add, update, remove, getById };
+    const subscribeToDoc = useCallback((docId, callback) => {
+        try {
+            setError(null);
+            const unsubscribe = onSnapshot(doc(db, collectionName, docId), (snap) => {
+                if (snap.exists()) {
+                    callback({ id: snap.id, ...snap.data() });
+                } else {
+                    callback(null);
+                }
+            }, (err) => {
+                console.error('Firestore subscribeToDoc error:', err);
+                setError(err.message);
+                callback(null);
+            });
+            return unsubscribe;
+        } catch (err) {
+            console.error('Firestore subscribeToDoc setup error:', err);
+            setError(err.message);
+            return () => {};
+        }
+    }, [collectionName]);
+
+    return { documents, loading, error, fetchAll, add, update, remove, getById, subscribeToDoc };
 }

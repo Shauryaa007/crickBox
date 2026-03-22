@@ -11,8 +11,8 @@ export default function Rankings() {
     const [activeTab, setActiveTab] = useState('batters');
 
     useEffect(() => {
-        fetchAll(user?.uid);
-    }, [user]);
+        fetchAll();
+    }, [fetchAll]);
 
     // Batter rankings — sorted by runs scored
     const batterRankings = [...players]

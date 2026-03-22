@@ -9,6 +9,7 @@ import MatchHistory from './pages/MatchHistory';
 import MatchDetails from './pages/MatchDetails';
 import PlayerProfile from './pages/PlayerProfile';
 import Rankings from './pages/Rankings';
+import AuthModal from './components/auth/AuthModal';
 
 export default function App() {
     return (
@@ -26,6 +27,7 @@ export default function App() {
                         <Route path="/match-details/:id" element={<MatchDetails />} />
                         <Route path="/rankings" element={<Rankings />} />
                     </Routes>
+                    <AuthModal />
                 </div>
             </Router>
         </AuthProvider>

@@ -10,8 +10,8 @@ export default function MatchHistory() {
     const { documents: matches, loading, fetchAll } = useFirestore('matches');
 
     useEffect(() => {
-        fetchAll(user?.uid);
-    }, [user]);
+        fetchAll();
+    }, [fetchAll]);
 
     const getTeamAName = (match) => {
         return match.currentState?.teamAName || match.teamA?.name || 'Team A';

@@ -12,8 +12,8 @@ export default function Players() {
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
-        fetchAll(user?.uid);
-    }, [user]);
+        fetchAll();
+    }, [fetchAll]);
 
     const handleSave = async (data) => {
         try {
@@ -22,7 +22,7 @@ export default function Players() {
             } else {
                 await add({ ...data, createdBy: user?.uid || 'anonymous' });
             }
-            await fetchAll(user?.uid);
+            await fetchAll();
             setEditingPlayer(null);
         } catch (err) {
             // Error is already set in useFirestore hook
@@ -47,12 +47,14 @@ export default function Players() {
                     <h1 className="text-xl font-black text-white">Players</h1>
                     <p className="text-xs text-surface-400">{players.length} players registered</p>
                 </div>
-                <button
-                    onClick={() => { setEditingPlayer(null); setShowForm(true); }}
-                    className="btn-primary px-4 py-2.5 text-sm"
-                >
-                    + Add Player
-                </button>
+                {user && (
+                    <button
+                        onClick={() => { setEditingPlayer(null); setShowForm(true); }}
+                        className="btn-primary px-4 py-2.5 text-sm"
+                    >
+                        + Add Player
+                    </button>
+                )}
             </div>
 
             {/* Error banner */}
@@ -61,7 +63,7 @@ export default function Players() {
                     <p className="text-red-400 text-xs font-medium mb-1">⚠️ Firebase Error</p>
                     <p className="text-red-300 text-xs">{error}</p>
                     <button
-                        onClick={() => fetchAll(user?.uid)}
+                        onClick={() => fetchAll()}
                         className="mt-2 text-xs text-red-400 underline"
                     >
                         Retry
@@ -94,7 +96,7 @@ export default function Players() {
                     <p className="text-sm text-surface-500 mb-4">
                         {searchQuery ? 'Try a different search' : 'Add your first player to get started'}
                     </p>
-                    {!searchQuery && (
+                    {!searchQuery && user && (
                         <button
                             onClick={() => setShowForm(true)}
                             className="btn-primary px-5 py-2.5 text-sm"
@@ -109,7 +111,7 @@ export default function Players() {
                         <PlayerCard
                             key={player.id}
                             player={player}
-                            onEdit={handleEdit}
+                            onEdit={user ? handleEdit : null}
                         />
                     ))}
                 </div>

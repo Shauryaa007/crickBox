@@ -9,8 +9,8 @@ export default function Home() {
     const [recentMatches, setRecentMatches] = useState([]);
 
     useEffect(() => {
-        fetchAll(user?.uid);
-    }, [user]);
+        fetchAll();
+    }, [fetchAll]);
 
     useEffect(() => {
         setRecentMatches(matches.slice(0, 3));

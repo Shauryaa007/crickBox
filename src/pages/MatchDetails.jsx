@@ -15,8 +15,8 @@ export default function MatchDetails() {
     const [activeTab, setActiveTab] = useState('scorecard');
 
     useEffect(() => {
-        fetchPlayers(user?.uid);
-    }, [user]);
+        fetchPlayers();
+    }, [fetchPlayers]);
 
     useEffect(() => {
         const load = async () => {
@@ -301,9 +301,24 @@ export default function MatchDetails() {
 
                     {state.result && (
                         <div className="mt-3 pt-3 border-t border-surface-700/50">
-                            <p className="text-sm font-bold text-primary-400 text-center">
+                            <p className="text-sm font-bold text-primary-400 text-center mb-3">
                                 🏆 {state.result}
                             </p>
+                            <button
+                                onClick={() => navigate('/new-match', {
+                                    state: {
+                                        rematchTeams: {
+                                            teamA: state.teamAPlayerIds,
+                                            teamB: state.teamBPlayerIds,
+                                            teamAName: teamAName,
+                                            teamBName: teamBName
+                                        }
+                                    }
+                                })}
+                                className="btn-primary w-full py-2.5 text-sm"
+                            >
+                                🔄 Rematch
+                            </button>
                         </div>
                     )}
                 </div>

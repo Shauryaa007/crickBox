@@ -9,8 +9,9 @@ import ScoringControls from '../components/scoring/ScoringControls';
 import Modal from '../components/common/Modal';
 import { mergeMatchStatsIntoPlayer } from '../lib/statsCalculator';
 
-function LiveMatchInner({ matchDoc, players }) {
+function LiveMatchInner({ matchDoc, players, user }) {
     const { matchState, history, updateCurrent } = useMatch();
+    const isAdmin = user && matchDoc?.createdBy === user.uid;
     const { update: updateMatch } = useFirestore('matches');
     const { update: updatePlayer, getById: getPlayer } = useFirestore('players');
     const { id } = useParams();
@@ -161,12 +162,14 @@ function LiveMatchInner({ matchDoc, players }) {
             <Scoreboard players={players} />
 
             {/* Scoring controls */}
-            <div className="mt-3">
-                <ScoringControls
-                    players={players}
-                    battingTeamPlayerIds={battingTeamPlayerIds}
-                />
-            </div>
+            {isAdmin && (
+                <div className="mt-3">
+                    <ScoringControls
+                        players={players}
+                        battingTeamPlayerIds={battingTeamPlayerIds}
+                    />
+                </div>
+            )}
 
             {/* Innings Break Modal */}
             <Modal
@@ -182,9 +185,11 @@ function LiveMatchInner({ matchDoc, players }) {
                     <p className="text-surface-300">
                         Target: <span className="text-amber-400 font-bold">{matchState.target}</span> runs
                     </p>
-                    <button onClick={startSecondInnings} className="btn-primary w-full py-4 text-lg">
-                        Start 2nd Innings →
-                    </button>
+                    {isAdmin && (
+                        <button onClick={startSecondInnings} className="btn-primary w-full py-4 text-lg">
+                            Start 2nd Innings →
+                        </button>
+                    )}
                 </div>
             </Modal>
 
@@ -260,19 +265,36 @@ function LiveMatchInner({ matchDoc, players }) {
                             </span>
                         </div>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col gap-3">
                         <button
-                            onClick={() => navigate('/')}
-                            className="btn-secondary flex-1 py-3"
+                            onClick={() => navigate('/new-match', {
+                                state: {
+                                    rematchTeams: {
+                                        teamA: matchState.teamAPlayerIds,
+                                        teamB: matchState.teamBPlayerIds,
+                                        teamAName: matchState.teamAName,
+                                        teamBName: matchState.teamBName
+                                    }
+                                }
+                            })}
+                            className="btn-primary w-full py-3"
                         >
-                            Home
+                            🔄 Rematch
                         </button>
-                        <button
-                            onClick={() => navigate('/history')}
-                            className="btn-primary flex-1 py-3"
-                        >
-                            View History
-                        </button>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => navigate('/')}
+                                className="btn-secondary flex-1 py-3"
+                            >
+                                Home
+                            </button>
+                            <button
+                                onClick={() => navigate('/history')}
+                                className="btn-secondary flex-1 py-3"
+                            >
+                                View History
+                            </button>
+                        </div>
                     </div>
                 </div>
             </Modal>
@@ -289,8 +311,8 @@ export default function LiveMatch() {
     const [initialState, setInitialState] = useState(null);
 
     useEffect(() => {
-        fetchPlayers(user?.uid);
-    }, [user]);
+        fetchPlayers();
+    }, [fetchPlayers]);
 
     useEffect(() => {
         const load = async () => {
@@ -336,7 +358,7 @@ export default function LiveMatch() {
 
     return (
         <MatchProvider initialState={initialState}>
-            <LiveMatchInner matchDoc={matchDoc} players={players} />
+            <LiveMatchInner matchDoc={matchDoc} players={players} user={user} />
         </MatchProvider>
     );
 }

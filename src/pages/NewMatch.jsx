@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFirestore } from '../hooks/useFirestore';
 import TeamSelector from '../components/match/TeamSelector';
 import Modal from '../components/common/Modal';
 
 export default function NewMatch() {
-    const { user } = useAuth();
+    const { user, openAuthModal } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const { documents: players, fetchAll: fetchPlayers } = useFirestore('players');
     const { add: addMatch } = useFirestore('matches');
 
@@ -22,8 +23,18 @@ export default function NewMatch() {
     const [manualOversModalOpen, setManualOversModalOpen] = useState(false);
 
     useEffect(() => {
-        fetchPlayers(user?.uid);
-    }, [user]);
+        fetchPlayers();
+    }, [fetchPlayers]);
+
+    // Handle rematch teams from navigation state
+    useEffect(() => {
+        if (location.state?.rematchTeams && step === 1 && !teams) {
+            setTeams(location.state.rematchTeams);
+            setStep(2);
+            // Clear location state so refreshing doesn't automatically trigger it again
+            window.history.replaceState({}, document.title);
+        }
+    }, [location.state, step, teams]);
 
     const getPlayerName = (id) => {
         const p = players.find(pl => pl.id === id);
@@ -81,6 +92,17 @@ export default function NewMatch() {
 
     const canStartMatch = openingBatsman1 && openingBatsman2 && openingBowler
         && openingBatsman1 !== openingBatsman2;
+
+    if (!user) {
+        return (
+            <div className="min-h-screen pt-20 pb-24 px-4 max-w-lg mx-auto flex flex-col items-center justify-center">
+                <div className="text-5xl mb-4">🔒</div>
+                <h2 className="text-xl font-bold text-white mb-2">Sign In Required</h2>
+                <p className="text-surface-400 text-center mb-6">You must be signed in to create and start a new match.</p>
+                <button onClick={openAuthModal} className="btn-primary px-6 py-3">Sign In to Continue</button>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen pt-20 pb-24 px-4 max-w-lg mx-auto">

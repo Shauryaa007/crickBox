@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 export default function Navbar() {
-    const { user, signIn, signOut } = useAuth();
+    const { user, openAuthModal, signOut } = useAuth();
     const location = useLocation();
 
     const navItems = [
@@ -21,7 +21,7 @@ export default function Navbar() {
                         <span className="text-2xl">🏏</span>
                         <span className="font-bold text-lg text-white">CricScorer</span>
                     </Link>
-                    {/* <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
                         {user ? (
                             <div className="flex items-center gap-2">
                                 <img
@@ -38,13 +38,13 @@ export default function Navbar() {
                             </div>
                         ) : (
                             <button
-                                onClick={signIn}
+                                onClick={openAuthModal}
                                 className="btn-primary text-sm px-4 py-2"
                             >
                                 Sign In
                             </button>
                         )}
-                    </div> */}
+                    </div>
                 </div>
             </header>
 

@@ -62,14 +62,69 @@ export default function MatchDetails() {
     const firstBowlingPlayerIds = firstBatIsA ? state.teamBPlayerIds : state.teamAPlayerIds;
     const secondBowlingPlayerIds = firstBatIsA ? state.teamAPlayerIds : state.teamBPlayerIds;
 
-    const firstInningsBattingStats = state.firstInningsBattingStats || {};
-    const firstInningsBowlingStats = state.firstInningsBowlingStats || {};
-    const secondInningsBattingStats = state.battingStats || {};
-    const secondInningsBowlingStats = state.bowlingStats || {};
-
     const ballLog = state.ballLog || [];
-    const firstInningsBalls = ballLog.filter(b => b.innings === 1);
-    const secondInningsBalls = ballLog.filter(b => b.innings === 2);
+
+    const getInningsData = (num) => {
+        if (num === 1) {
+            return {
+                title: `1st Innings — ${firstBattingTeamName}`,
+                batTeam: firstBattingTeamName,
+                bowlTeam: secondBattingTeamName,
+                batIds: firstBattingPlayerIds,
+                bowlIds: firstBowlingPlayerIds,
+                batStats: state.firstInningsBattingStats || {},
+                bowlStats: state.firstInningsBowlingStats || {},
+                score: state.firstInningsScore || null,
+                balls: ballLog.filter(b => b.innings === 1)
+            };
+        }
+        if (num === 2) {
+            return {
+                title: `2nd Innings — ${secondBattingTeamName}`,
+                batTeam: secondBattingTeamName,
+                bowlTeam: firstBattingTeamName,
+                batIds: secondBattingPlayerIds,
+                bowlIds: secondBowlingPlayerIds,
+                batStats: state.innings >= 3 ? state.secondInningsBattingStats : state.battingStats || {},
+                bowlStats: state.innings >= 3 ? state.secondInningsBowlingStats : state.bowlingStats || {},
+                score: state.innings >= 3 ? state.secondInningsScore : { runs: state.runs, wickets: state.wickets, balls: state.balls },
+                balls: ballLog.filter(b => b.innings === 2)
+            };
+        }
+        if (num === 3) {
+            if (state.innings < 3) return null;
+            return {
+                title: `Super Over 1 — ${secondBattingTeamName}`,
+                batTeam: secondBattingTeamName,
+                bowlTeam: firstBattingTeamName,
+                batIds: secondBattingPlayerIds,
+                bowlIds: secondBowlingPlayerIds,
+                batStats: state.innings >= 4 ? state.thirdInningsBattingStats : state.battingStats || {},
+                bowlStats: state.innings >= 4 ? state.thirdInningsBowlingStats : state.bowlingStats || {},
+                score: state.innings >= 4 ? state.thirdInningsScore : { runs: state.runs, wickets: state.wickets, balls: state.balls },
+                balls: ballLog.filter(b => b.innings === 3)
+            };
+        }
+        if (num === 4) {
+            if (state.innings < 4) return null;
+            return {
+                title: `Super Over 2 — ${firstBattingTeamName}`,
+                batTeam: firstBattingTeamName,
+                bowlTeam: secondBattingTeamName,
+                batIds: firstBattingPlayerIds,
+                bowlIds: firstBowlingPlayerIds,
+                batStats: state.battingStats || {},
+                bowlStats: state.bowlingStats || {},
+                score: { runs: state.runs, wickets: state.wickets, balls: state.balls },
+                balls: ballLog.filter(b => b.innings === 4)
+            };
+        }
+        return null;
+    };
+    
+    const inningsList = [1, 2, 3, 4]
+        .map(n => getInningsData(n))
+        .filter(Boolean);
 
     // Group balls by over
     function groupByOvers(balls) {
@@ -291,12 +346,34 @@ export default function MatchDetails() {
                         <div className="flex items-center justify-between">
                             <span className="font-bold text-white text-base">{secondBattingTeamName}</span>
                             <span className="text-lg font-black text-white">
-                                {state.runs}/{state.wickets}
+                                {state.innings > 2 ? state.secondInningsScore?.runs + '/' + state.secondInningsScore?.wickets : state.runs + '/' + state.wickets}
                                 <span className="text-xs text-surface-400 font-normal ml-1">
-                                    ({getOversString(state.balls)})
+                                    ({getOversString(state.innings > 2 ? state.secondInningsScore?.balls : state.balls)})
                                 </span>
                             </span>
                         </div>
+                        {state.innings > 2 && (
+                            <div className="flex items-center justify-between pt-2 border-t border-surface-700/50">
+                                <span className="font-bold text-surface-300 text-sm">Super Over 1 ({secondBattingTeamName})</span>
+                                <span className="text-base font-black text-white">
+                                    {state.innings > 3 ? state.thirdInningsScore?.runs + '/' + state.thirdInningsScore?.wickets : state.runs + '/' + state.wickets}
+                                    <span className="text-xs text-surface-400 font-normal ml-1">
+                                        ({getOversString(state.innings > 3 ? state.thirdInningsScore?.balls : state.balls)})
+                                    </span>
+                                </span>
+                            </div>
+                        )}
+                        {state.innings > 3 && (
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-surface-300 text-sm">Super Over 2 ({firstBattingTeamName})</span>
+                                <span className="text-base font-black text-white">
+                                    {state.runs}/{state.wickets}
+                                    <span className="text-xs text-surface-400 font-normal ml-1">
+                                        ({getOversString(state.balls)})
+                                    </span>
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {state.result && (
@@ -346,50 +423,38 @@ export default function MatchDetails() {
 
             {/* Scorecard Tab */}
             {activeTab === 'scorecard' && (
-                <div className="animate-fade-in">
-                    {/* First Innings */}
-                    <div className="mb-2">
-                        <h2 className="text-xs font-bold text-surface-400 uppercase tracking-wider mb-2">
-                            1st Innings — {firstBattingTeamName}
-                        </h2>
-                    </div>
-                    {renderBattingCard(
-                        firstBattingTeamName,
-                        firstBattingPlayerIds,
-                        firstInningsBattingStats,
-                        state.firstInningsScore,
-                    )}
-                    {renderBowlingCard(
-                        secondBattingTeamName,
-                        firstBowlingPlayerIds,
-                        firstInningsBowlingStats,
-                    )}
-
-                    {/* Second Innings */}
-                    <div className="mb-2 mt-6">
-                        <h2 className="text-xs font-bold text-surface-400 uppercase tracking-wider mb-2">
-                            2nd Innings — {secondBattingTeamName}
-                        </h2>
-                    </div>
-                    {renderBattingCard(
-                        secondBattingTeamName,
-                        secondBattingPlayerIds,
-                        secondInningsBattingStats,
-                        { runs: state.runs, wickets: state.wickets, balls: state.balls },
-                    )}
-                    {renderBowlingCard(
-                        firstBattingTeamName,
-                        secondBowlingPlayerIds,
-                        secondInningsBowlingStats,
-                    )}
+                <div className="animate-fade-in space-y-6">
+                    {inningsList.map((indata, i) => (
+                        <div key={i}>
+                            <div className="mb-2">
+                                <h2 className="text-xs font-bold text-surface-400 uppercase tracking-wider mb-2">
+                                    {indata.title}
+                                </h2>
+                            </div>
+                            {renderBattingCard(
+                                indata.batTeam,
+                                indata.batIds,
+                                indata.batStats,
+                                indata.score
+                            )}
+                            {renderBowlingCard(
+                                indata.bowlTeam,
+                                indata.bowlIds,
+                                indata.bowlStats
+                            )}
+                        </div>
+                    ))}
                 </div>
             )}
 
             {/* Ball by Ball Tab */}
             {activeTab === 'ballbyball' && (
-                <div className="animate-fade-in">
-                    {renderBallByBall(firstInningsBalls, `1st Innings — ${firstBattingTeamName}`)}
-                    {renderBallByBall(secondInningsBalls, `2nd Innings — ${secondBattingTeamName}`)}
+                <div className="animate-fade-in space-y-4">
+                    {inningsList.map((indata, i) => (
+                        <div key={i} className="mb-4">
+                            {renderBallByBall(indata.balls, indata.title)}
+                        </div>
+                    ))}
                 </div>
             )}
         </div>

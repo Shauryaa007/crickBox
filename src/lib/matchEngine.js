@@ -53,19 +53,23 @@ function isOverComplete(state) {
 }
 
 function isInningsComplete(state) {
-    const totalBalls = state.totalOvers * 6;
+    const isSuperOver = state.innings >= 3;
+    const totalBalls = isSuperOver ? 6 : state.totalOvers * 6;
     const totalPlayers = state.battingTeam === 'A'
         ? state.teamAPlayerIds.length
         : state.teamBPlayerIds.length;
 
+    // In super over, 2 wickets means all out
+    const maxWickets = isSuperOver ? 2 : totalPlayers;
+
     // All overs bowled
     if (state.balls >= totalBalls) return true;
 
-    // All out (last man rule: innings ends only when ALL players are out)
-    if (state.wickets >= totalPlayers) return true;
+    // All out
+    if (state.wickets >= maxWickets) return true;
 
-    // Second innings: target reached
-    if (state.innings === 2 && state.target !== null && state.runs >= state.target) {
+    // Chasing: target reached
+    if ((state.innings === 2 || state.innings === 4) && state.target !== null && state.runs >= state.target) {
         return true;
     }
 
@@ -83,10 +87,18 @@ function addBallToOver(state, result) {
 
 function addToBallLog(state, { type, runs, actualRuns, batsmanId, bowlerId, result, isExtra = false }) {
     if (!state.ballLog) state.ballLog = [];
+    
+    // Determine which over this ball belongs to
+    // If it's a valid delivery, state.balls has ALREADY been incremented at this point
+    // If it's an extra (NB/WD), state.balls has NOT been incremented
+    const priorBalls = isExtra ? state.balls : state.balls - 1;
+    const overIndex = Math.floor(priorBalls / 6);
+    const ballInOver = priorBalls % 6;
+
     state.ballLog.push({
         innings: state.innings,
-        over: Math.floor(state.balls / 6),  // current over number (0-indexed)
-        ballInOver: state.balls % 6,        // ball within the over
+        over: overIndex,
+        ballInOver: ballInOver,
         type,
         runs,
         actualRuns,
@@ -122,23 +134,54 @@ function checkAndHandleInningsComplete(state) {
             };
             state.firstInningsBattingStats = deepClone(state.battingStats);
             state.firstInningsBowlingStats = deepClone(state.bowlingStats);
-        } else {
-            state.matchStatus = 'completed';
-            const totalPlayers = state.battingTeam === 'A'
-                ? state.teamAPlayerIds.length
-                : state.teamBPlayerIds.length;
-
-            if (state.runs >= state.target) {
-                const wicketsRemaining = totalPlayers - state.wickets;
-                const winnerName = state.battingTeam === 'A' ? state.teamAName : state.teamBName;
-                state.result = `${winnerName} won by ${wicketsRemaining} wickets`;
+        } else if (state.innings === 2) {
+            if (state.runs === state.target - 1) {
+                state.matchStatus = 'super_over_break';
+                state.secondInningsScore = { runs: state.runs, wickets: state.wickets, balls: state.balls };
+                state.secondInningsBattingStats = deepClone(state.battingStats);
+                state.secondInningsBowlingStats = deepClone(state.bowlingStats);
             } else {
-                const runDiff = state.target - 1 - state.runs;
+                state.matchStatus = 'completed';
+                const totalPlayers = state.battingTeam === 'A'
+                    ? state.teamAPlayerIds.length
+                    : state.teamBPlayerIds.length;
+
+                if (state.runs >= state.target) {
+                    const wicketsRemaining = totalPlayers - state.wickets;
+                    const winnerName = state.battingTeam === 'A' ? state.teamAName : state.teamBName;
+                    state.result = `${winnerName} won by ${wicketsRemaining} wickets`;
+                } else {
+                    const runDiff = state.target - 1 - state.runs;
+                    const winnerName = state.battingTeam === 'A' ? state.teamBName : state.teamAName;
+                    state.result = `${winnerName} won by ${runDiff} runs`;
+                }
+            }
+        } else if (state.innings === 3) {
+            state.matchStatus = 'super_over_break_2';
+            state.target = state.runs + 1;
+            state.thirdInningsScore = { runs: state.runs, wickets: state.wickets, balls: state.balls };
+            state.thirdInningsBattingStats = deepClone(state.battingStats);
+            state.thirdInningsBowlingStats = deepClone(state.bowlingStats);
+        } else if (state.innings === 4) {
+            state.matchStatus = 'completed';
+            if (state.runs >= state.target) {
+                const winnerName = state.battingTeam === 'A' ? state.teamAName : state.teamBName;
+                state.result = `${winnerName} won the Super Over!`;
+            } else if (state.runs === state.target - 1) {
+                state.result = "Super Over Tied! Match Drawn.";
+            } else {
                 const winnerName = state.battingTeam === 'A' ? state.teamBName : state.teamAName;
-                state.result = `${winnerName} won by ${runDiff} runs`;
+                state.result = `${winningMarginName(state, winnerName)} won the Super Over!`;
             }
         }
     }
+}
+
+function winningMarginName(state, winnerName) {
+    if (state.runs < state.target) {
+        return `${winnerName} (${state.target - 1 - state.runs} runs)`;
+    }
+    return winnerName;
 }
 
 function updateBattingStats(state, batsmanId, runs, isBoundaryFour, isBoundarySix) {
@@ -274,7 +317,8 @@ export function applyAction(currentState, action) {
             state.runs += actualRuns;
             // No ball doesn't count as legal delivery, don't increment balls
 
-            updateBattingStats(state, state.currentBatsmanId, extraRuns, false, false);
+            // Reward the batsman with fours and sixes if they hit a boundary on a no-ball
+            updateBattingStats(state, state.currentBatsmanId, extraRuns, extraRuns === 4, extraRuns === 6);
             // Remove the ball count since NB is not legal
             state.battingStats[state.currentBatsmanId].balls -= 1;
             updateBowlingStats(state, state.currentBowlerId, actualRuns, false, true, false);
@@ -425,6 +469,47 @@ export function createSecondInningsState(prevState, {
         firstInningsBowlingStats: prevState.bowlingStats,
         battingTeam: prevState.bowlingTeam,
         bowlingTeam: prevState.battingTeam,
+        matchStatus: 'live',
+        result: null,
+        needsBowlerChange: false,
+        needsNewBatsman: false,
+        isLastMan: false,
+    };
+}
+
+/**
+ * Create state for Super Overs (3rd or 4th innings)
+ */
+export function createSuperOverInningsState(prevState, {
+    openingBatsman1Id,
+    openingBatsman2Id,
+    openingBowlerId,
+    battingTeamStr,
+}, isThirdInnings) {
+    const battingStats = {};
+    battingStats[openingBatsman1Id] = { runs: 0, balls: 0, fours: 0, sixes: 0, isOut: false, dismissalType: null };
+    battingStats[openingBatsman2Id] = { runs: 0, balls: 0, fours: 0, sixes: 0, isOut: false, dismissalType: null };
+
+    const bowlingStats = {};
+    bowlingStats[openingBowlerId] = { balls: 0, runs: 0, wickets: 0, noBalls: 0, wides: 0, overs: '0.0' };
+
+    return {
+        ...prevState,
+        runs: 0,
+        wickets: 0,
+        balls: 0,
+        innings: isThirdInnings ? 3 : 4,
+        currentBatsmanId: openingBatsman1Id,
+        nonStrikerId: openingBatsman2Id,
+        currentBowlerId: openingBowlerId,
+        isPowerplay: false,
+        battingStats,
+        bowlingStats,
+        currentOverBalls: [],
+        ballLog: prevState.ballLog || [],
+        
+        battingTeam: isThirdInnings ? battingTeamStr : prevState.bowlingTeam,
+        bowlingTeam: isThirdInnings ? (battingTeamStr === 'A' ? 'B' : 'A') : prevState.battingTeam,
         matchStatus: 'live',
         result: null,
         needsBowlerChange: false,

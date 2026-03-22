@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFirestore } from '../hooks/useFirestore';
 import TeamSelector from '../components/match/TeamSelector';
+import CoinToss from '../components/match/CoinToss';
 import Modal from '../components/common/Modal';
 
 export default function NewMatch() {
@@ -15,8 +16,8 @@ export default function NewMatch() {
     const [step, setStep] = useState(1);
     const [teams, setTeams] = useState(null);
     const [totalOvers, setTotalOvers] = useState(5);
-    const [tossWinner, setTossWinner] = useState('A');
-    const [tossDecision, setTossDecision] = useState('bat');
+    const [tossWinner, setTossWinner] = useState('');
+    const [tossDecision, setTossDecision] = useState('');
     const [openingBatsman1, setOpeningBatsman1] = useState('');
     const [openingBatsman2, setOpeningBatsman2] = useState('');
     const [openingBowler, setOpeningBowler] = useState('');
@@ -234,63 +235,42 @@ export default function NewMatch() {
 
                     {/* Toss */}
                     <div className="card space-y-3">
-                        <h3 className="text-sm font-medium text-surface-300">Toss</h3>
-                        <div>
-                            <label className="text-xs text-surface-400 mb-1 block">Toss Winner</label>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setTossWinner('A')}
-                                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all
-                    ${tossWinner === 'A'
-                                            ? 'bg-primary-600 text-white'
-                                            : 'bg-surface-700 text-surface-400'}`}
+                        {tossDecision ? (
+                            <div className="text-center py-4 animate-fade-in">
+                                <h3 className="text-lg font-bold text-primary-400 mb-2">
+                                    {tossWinner === 'A' ? teams.teamAName : teams.teamBName} won the toss and chose to {tossDecision === 'bat' ? 'BAT' : 'BOWL'}.
+                                </h3>
+                                <button 
+                                    onClick={() => { setTossWinner(''); setTossDecision(''); }} 
+                                    className="text-xs text-surface-400 hover:text-white underline mt-2"
                                 >
-                                    {teams.teamAName}
+                                    Re-Toss
                                 </button>
-                                <button
-                                    onClick={() => setTossWinner('B')}
-                                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all
-                    ${tossWinner === 'B'
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-surface-700 text-surface-400'}`}
-                                >
-                                    {teams.teamBName}
-                                </button>
+                                <div className="text-xs text-surface-400 pt-4 mt-4 border-t border-surface-800">
+                                    <span className="font-semibold text-white">{battingTeamName}</span> will bat first
+                                </div>
                             </div>
-                        </div>
-                        <div>
-                            <label className="text-xs text-surface-400 mb-1 block">Chose to</label>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setTossDecision('bat')}
-                                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all
-                    ${tossDecision === 'bat'
-                                            ? 'bg-primary-600 text-white'
-                                            : 'bg-surface-700 text-surface-400'}`}
-                                >
-                                    🏏 Bat
-                                </button>
-                                <button
-                                    onClick={() => setTossDecision('bowl')}
-                                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all
-                    ${tossDecision === 'bowl'
-                                            ? 'bg-primary-600 text-white'
-                                            : 'bg-surface-700 text-surface-400'}`}
-                                >
-                                    🎳 Bowl
-                                </button>
-                            </div>
-                        </div>
-                        <div className="text-xs text-surface-400 pt-1">
-                            <span className="font-semibold text-white">{battingTeamName}</span> will bat first
-                        </div>
+                        ) : (
+                            <CoinToss 
+                                teamAName={teams.teamAName} 
+                                teamBName={teams.teamBName} 
+                                onTossComplete={(w, d) => {
+                                    setTossWinner(w);
+                                    setTossDecision(d);
+                                }} 
+                            />
+                        )}
                     </div>
 
                     <div className="flex gap-3">
                         <button onClick={() => setStep(1)} className="btn-secondary flex-1 py-3">
                             ← Back
                         </button>
-                        <button onClick={() => setStep(3)} className="btn-primary flex-1 py-3">
+                        <button 
+                            onClick={() => setStep(3)} 
+                            disabled={!tossDecision}
+                            className="btn-primary flex-1 py-3 disabled:opacity-40"
+                        >
                             Next →
                         </button>
                     </div>

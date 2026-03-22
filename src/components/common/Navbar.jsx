@@ -23,18 +23,25 @@ export default function Navbar() {
                     </Link>
                     <div className="flex items-center gap-3">
                         {user ? (
-                            <div className="flex items-center gap-2">
-                                <img
-                                    src={user.photoURL || '/cricket.svg'}
-                                    alt={user.displayName || 'User'}
-                                    className="w-8 h-8 rounded-full border-2 border-primary-500"
-                                />
-                                <button
-                                    onClick={signOut}
-                                    className="text-xs text-surface-400 hover:text-white transition-colors"
-                                >
-                                    Logout
-                                </button>
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <img
+                                        src={user.photoURL || '/cricket.svg'}
+                                        alt={user.displayName || 'User'}
+                                        className="w-8 h-8 rounded-full border-2 border-primary-500"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-white line-clamp-1 max-w-[100px] sm:max-w-[150px]">
+                                            {user.displayName || 'Player'}
+                                        </span>
+                                        <button
+                                            onClick={signOut}
+                                            className="text-[10px] text-surface-400 hover:text-red-400 transition-colors text-left font-medium"
+                                        >
+                                            Logout
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         ) : (
                             <button

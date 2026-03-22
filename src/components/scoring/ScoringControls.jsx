@@ -12,6 +12,7 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
     const [bowlerModalOpen, setBowlerModalOpen] = useState(false);
     const [batsmanModalOpen, setBatsmanModalOpen] = useState(false);
     const [powerplayAskOpen, setPowerplayAskOpen] = useState(false);
+    const [noBallAskOpen, setNoBallAskOpen] = useState(false);
 
     const getPlayerName = (id) => {
         const p = players.find(pl => pl.id === id);
@@ -138,7 +139,7 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
                     WD
                 </button>
                 <button
-                    onClick={() => scoreNoBall(0)}
+                    onClick={() => setNoBallAskOpen(true)}
                     disabled={isMatchOver}
                     className="btn-score py-4 bg-amber-900/30 border-amber-500/40 text-amber-300
             hover:bg-amber-800/40 text-base"
@@ -289,6 +290,33 @@ export default function ScoringControls({ players, battingTeamPlayerIds }) {
                         >
                             No
                         </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* No Ball Modal */}
+            <Modal
+                isOpen={noBallAskOpen}
+                onClose={() => setNoBallAskOpen(false)}
+                title="No Ball details"
+            >
+                <div>
+                    <h4 className="text-sm font-medium text-surface-300 mb-3 text-center">
+                        Runs scored off the bat on this No Ball?
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2 block">
+                        {[0, 1, 2, 3, 4, 6].map(runs => (
+                            <button
+                                key={runs}
+                                onClick={() => {
+                                    scoreNoBall(runs);
+                                    setNoBallAskOpen(false);
+                                }}
+                                className="btn-score py-4 bg-surface-800 border-surface-600 hover:border-amber-500 hover:text-amber-400"
+                            >
+                                {runs === 0 ? '0 (Just NB)' : `+${runs}`}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </Modal>

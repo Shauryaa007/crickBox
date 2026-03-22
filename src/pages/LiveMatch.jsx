@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFirestore } from '../hooks/useFirestore';
 import { MatchProvider, useMatch } from '../context/MatchContext';
-import { createInitialState, createSecondInningsState } from '../lib/matchEngine';
+import { createInitialState, createSecondInningsState, createSuperOverInningsState } from '../lib/matchEngine';
 import Scoreboard from '../components/scoring/Scoreboard';
 import ScoringControls from '../components/scoring/ScoringControls';
+import CoinToss from '../components/match/CoinToss';
 import Modal from '../components/common/Modal';
 import { mergeMatchStatsIntoPlayer } from '../lib/statsCalculator';
 
@@ -18,11 +19,15 @@ function LiveMatchInner({ matchDoc, players, user }) {
     const navigate = useNavigate();
 
     const [showInningsBreak, setShowInningsBreak] = useState(false);
+    const [showSuperOverBreak, setShowSuperOverBreak] = useState(false);
     const [showMatchResult, setShowMatchResult] = useState(false);
-    const [secondInningsSetup, setSecondInningsSetup] = useState(false);
+    const [inningsSetupPhase, setInningsSetupPhase] = useState(0); // 0=none, 2=innings 2, 3=super over 1, 4=super over 2
     const [si_bat1, setSi_bat1] = useState('');
     const [si_bat2, setSi_bat2] = useState('');
     const [si_bowl, setSi_bowl] = useState('');
+    const [soTossWinner, setSoTossWinner] = useState('');
+    const [soTossDecision, setSoTossDecision] = useState('');
+    const statsUpdateAttempted = useRef(false);
 
     const getPlayerName = (pid) => {
         const p = players.find(pl => pl.id === pid);
@@ -52,8 +57,10 @@ function LiveMatchInner({ matchDoc, players, user }) {
 
     // Handle innings break
     useEffect(() => {
-        if (matchState.matchStatus === 'innings_break' && !showInningsBreak && !secondInningsSetup) {
+        if (matchState.matchStatus === 'innings_break' && !showInningsBreak && inningsSetupPhase !== 2) {
             setShowInningsBreak(true);
+        } else if ((matchState.matchStatus === 'super_over_break' || matchState.matchStatus === 'super_over_break_2') && !showSuperOverBreak && inningsSetupPhase !== 3 && inningsSetupPhase !== 4) {
+            setShowSuperOverBreak(true);
         }
     }, [matchState.matchStatus]);
 
@@ -61,15 +68,18 @@ function LiveMatchInner({ matchDoc, players, user }) {
     useEffect(() => {
         if (matchState.matchStatus === 'completed' && !showMatchResult) {
             setShowMatchResult(true);
-            // Update player stats
-            updatePlayerStats();
+            // Only update player stats if hasn't been done yet in DB and we are the creator and haven't tried in this session
+            if (isAdmin && !matchDoc?.statsUpdated && !statsUpdateAttempted.current) {
+                statsUpdateAttempted.current = true;
+                updatePlayerStats();
+            }
         }
-    }, [matchState.matchStatus]);
+    }, [matchState.matchStatus, showMatchResult, isAdmin, matchDoc?.statsUpdated]);
 
     const updatePlayerStats = async () => {
         try {
             const allPlayerIds = [...matchState.teamAPlayerIds, ...matchState.teamBPlayerIds];
-            
+
             // Get stats from both innings
             const fBat = matchState.firstInningsBattingStats || {};
             const fBowl = matchState.firstInningsBowlingStats || {};
@@ -105,33 +115,77 @@ function LiveMatchInner({ matchDoc, players, user }) {
                     await updatePlayer(pid, updated);
                 }
             }
+
+            // Mark match as having stats registered to prevent future double updates
+            await updateMatch(id, { statsUpdated: true });
         } catch (e) {
             console.error('Failed to update player stats:', e);
+            statsUpdateAttempted.current = false; // Allow retry if failed
         }
     };
 
-    const startSecondInnings = () => {
-        setShowInningsBreak(false);
-        setSecondInningsSetup(true);
+    const startNextInnings = () => {
+        if (matchState.matchStatus === 'innings_break') {
+            setShowInningsBreak(false);
+            setInningsSetupPhase(2);
+        } else if (matchState.matchStatus === 'super_over_break') {
+            setShowSuperOverBreak(false);
+            setInningsSetupPhase(3);
+        } else if (matchState.matchStatus === 'super_over_break_2') {
+            setShowSuperOverBreak(false);
+            setInningsSetupPhase(4);
+        }
     };
 
-    const handleSecondInningsStart = () => {
+    const handleInningsStart = () => {
         if (!si_bat1 || !si_bat2 || !si_bowl || si_bat1 === si_bat2) return;
-        const newState = createSecondInningsState(matchState, {
-            openingBatsman1Id: si_bat1,
-            openingBatsman2Id: si_bat2,
-            openingBowlerId: si_bowl,
-        });
+
+        let newState;
+        if (inningsSetupPhase === 2) {
+            newState = createSecondInningsState(matchState, {
+                openingBatsman1Id: si_bat1,
+                openingBatsman2Id: si_bat2,
+                openingBowlerId: si_bowl,
+            });
+        } else if (inningsSetupPhase === 3) {
+            newState = createSuperOverInningsState(matchState, {
+                openingBatsman1Id: si_bat1,
+                openingBatsman2Id: si_bat2,
+                openingBowlerId: si_bowl,
+                battingTeamStr: soBattingTeam,
+            }, true);
+        } else if (inningsSetupPhase === 4) {
+            newState = createSuperOverInningsState(matchState, {
+                openingBatsman1Id: si_bat1,
+                openingBatsman2Id: si_bat2,
+                openingBowlerId: si_bowl,
+            }, false);
+        }
+
         updateCurrent(newState);
-        setSecondInningsSetup(false);
+        setInningsSetupPhase(0);
+        setSi_bat1('');
+        setSi_bat2('');
+        setSi_bowl('');
+        setSoTossWinner('');
+        setSoTossDecision('');
     };
 
-    const secondBattingTeamIds = matchState.battingTeam === 'A'
-        ? matchState.teamBPlayerIds
-        : matchState.teamAPlayerIds;
-    const secondBowlingTeamIds = matchState.battingTeam === 'A'
-        ? matchState.teamAPlayerIds
-        : matchState.teamBPlayerIds;
+    const soBattingTeam = soTossDecision === 'bat'
+        ? soTossWinner
+        : (soTossWinner === 'A' ? 'B' : (soTossWinner === 'B' ? 'A' : ''));
+
+    const nextBattingTeamIds = inningsSetupPhase === 3
+        ? (soBattingTeam === 'A' ? matchState.teamAPlayerIds : matchState.teamBPlayerIds)
+        : (matchState.battingTeam === 'A' ? matchState.teamBPlayerIds : matchState.teamAPlayerIds);
+
+    const nextBowlingTeamIds = inningsSetupPhase === 3
+        ? (soBattingTeam === 'A' ? matchState.teamBPlayerIds : matchState.teamAPlayerIds)
+        : (matchState.battingTeam === 'A' ? matchState.teamAPlayerIds : matchState.teamBPlayerIds);
+
+    const nextBattingTeamName = inningsSetupPhase === 3
+        ? (soBattingTeam === 'A' ? matchState.teamAName : matchState.teamBName)
+        : (matchState.battingTeam === 'A' ? matchState.teamBName : matchState.teamAName);
 
     const battingTeamPlayerIds = matchState.battingTeam === 'A'
         ? matchState.teamAPlayerIds
@@ -186,55 +240,101 @@ function LiveMatchInner({ matchDoc, players, user }) {
                         Target: <span className="text-amber-400 font-bold">{matchState.target}</span> runs
                     </p>
                     {isAdmin && (
-                        <button onClick={startSecondInnings} className="btn-primary w-full py-4 text-lg">
+                        <button onClick={startNextInnings} className="btn-primary w-full py-4 text-lg">
                             Start 2nd Innings →
                         </button>
                     )}
                 </div>
             </Modal>
 
-            {/* Second Innings Setup */}
-            {secondInningsSetup && (
+            {/* Super Over Break Modal */}
+            <Modal
+                isOpen={showSuperOverBreak}
+                onClose={() => { }}
+                title="🔥 SUPER OVER!"
+                size="lg"
+            >
+                <div className="space-y-4 text-center">
+                    <div className="text-6xl mb-2 animate-pulse">⚡</div>
+                    <h2 className="text-2xl font-bold text-amber-500 mb-2">
+                        {matchState.innings === 2 ? "MATCH TIED!" : "INNINGS COMPLETE"}
+                    </h2>
+                    {matchState.innings === 3 && (
+                        <p className="text-surface-300 text-lg">
+                            Target to Win: <span className="text-white font-bold">{matchState.target}</span> runs
+                        </p>
+                    )}
+                    <p className="text-surface-400 text-sm">
+                        {matchState.innings === 2
+                            ? "Get ready for a 1-over tiebreaker."
+                            : "One over left. Time to chase!"}
+                    </p>
+                    {isAdmin && (
+                        <button onClick={startNextInnings} className="btn-primary w-full py-4 text-lg">
+                            Start Super Over {matchState.innings === 2 ? "1" : "2"} →
+                        </button>
+                    )}
+                </div>
+            </Modal>
+
+            {/* Innings Setup */}
+            {inningsSetupPhase > 0 && (
                 <div className="fixed inset-0 z-50 bg-surface-950/95 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="card w-full max-w-md space-y-4 animate-bounce-in">
-                        <h3 className="text-lg font-bold text-white text-center">2nd Innings Setup</h3>
-                        <p className="text-xs text-surface-400 text-center">
-                            {matchState.battingTeam === 'A' ? matchState.teamBName : matchState.teamAName} batting now
-                        </p>
-                        <div>
-                            <label className="text-xs text-surface-400 mb-1 block">Striker</label>
-                            <select value={si_bat1} onChange={e => setSi_bat1(e.target.value)} className="input text-sm">
-                                <option value="">Select...</option>
-                                {secondBattingTeamIds.filter(id => id !== si_bat2).map(id => (
-                                    <option key={id} value={id}>{getPlayerName(id)}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-xs text-surface-400 mb-1 block">Non-Striker</label>
-                            <select value={si_bat2} onChange={e => setSi_bat2(e.target.value)} className="input text-sm">
-                                <option value="">Select...</option>
-                                {secondBattingTeamIds.filter(id => id !== si_bat1).map(id => (
-                                    <option key={id} value={id}>{getPlayerName(id)}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-xs text-surface-400 mb-1 block">Opening Bowler</label>
-                            <select value={si_bowl} onChange={e => setSi_bowl(e.target.value)} className="input text-sm">
-                                <option value="">Select...</option>
-                                {secondBowlingTeamIds.map(id => (
-                                    <option key={id} value={id}>{getPlayerName(id)}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <button
-                            onClick={handleSecondInningsStart}
-                            disabled={!si_bat1 || !si_bat2 || !si_bowl || si_bat1 === si_bat2}
-                            className="btn-primary w-full py-3 disabled:opacity-40"
-                        >
-                            Start Innings
-                        </button>
+                        <h3 className="text-lg font-bold text-white text-center">
+                            {inningsSetupPhase === 2 ? "2nd Innings Setup" : "Super Over Setup"}
+                        </h3>
+
+                        {inningsSetupPhase === 3 && !soTossDecision ? (
+                            <CoinToss
+                                teamAName={matchState.teamAName}
+                                teamBName={matchState.teamBName}
+                                onTossComplete={(w, d) => {
+                                    setSoTossWinner(w);
+                                    setSoTossDecision(d);
+                                }}
+                            />
+                        ) : (
+                            <>
+                                <p className="text-xs text-surface-400 text-center">
+                                    {nextBattingTeamName} batting now
+                                </p>
+                                <div>
+                                    <label className="text-xs text-surface-400 mb-1 block">Striker</label>
+                                    <select value={si_bat1} onChange={e => setSi_bat1(e.target.value)} className="input text-sm">
+                                        <option value="">Select...</option>
+                                        {nextBattingTeamIds.filter(id => id !== si_bat2).map(id => (
+                                            <option key={id} value={id}>{getPlayerName(id)}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-surface-400 mb-1 block">Non-Striker</label>
+                                    <select value={si_bat2} onChange={e => setSi_bat2(e.target.value)} className="input text-sm">
+                                        <option value="">Select...</option>
+                                        {nextBattingTeamIds.filter(id => id !== si_bat1).map(id => (
+                                            <option key={id} value={id}>{getPlayerName(id)}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-surface-400 mb-1 block">Opening Bowler</label>
+                                    <select value={si_bowl} onChange={e => setSi_bowl(e.target.value)} className="input text-sm">
+                                        <option value="">Select...</option>
+                                        {nextBowlingTeamIds.map(id => (
+                                            <option key={id} value={id}>{getPlayerName(id)}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <button
+                                    onClick={handleInningsStart}
+                                    disabled={!si_bat1 || !si_bat2 || !si_bowl || si_bat1 === si_bat2}
+                                    className="btn-primary w-full py-3 disabled:opacity-40"
+                                >
+                                    Start Innings
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
@@ -261,9 +361,25 @@ function LiveMatchInner({ matchDoc, players, user }) {
                         <div className="flex justify-between">
                             <span className="text-surface-400">2nd Innings</span>
                             <span className="text-white font-bold">
-                                {matchState.runs}/{matchState.wickets}
+                                {matchState.innings > 2 ? matchState.secondInningsScore?.runs + '/' + matchState.secondInningsScore?.wickets : matchState.runs + '/' + matchState.wickets}
                             </span>
                         </div>
+                        {matchState.innings > 2 && (
+                            <div className="flex justify-between pt-2 border-t border-surface-800">
+                                <span className="text-surface-400">Super Over 1</span>
+                                <span className="text-white font-bold">
+                                    {matchState.innings > 3 ? matchState.thirdInningsScore?.runs + '/' + matchState.thirdInningsScore?.wickets : matchState.runs + '/' + matchState.wickets}
+                                </span>
+                            </div>
+                        )}
+                        {matchState.innings > 3 && (
+                            <div className="flex justify-between">
+                                <span className="text-surface-400">Super Over 2</span>
+                                <span className="text-white font-bold">
+                                    {matchState.runs}/{matchState.wickets}
+                                </span>
+                            </div>
+                        )}
                     </div>
                     <div className="flex flex-col gap-3">
                         <button

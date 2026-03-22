@@ -185,29 +185,67 @@ export default function Scoreboard({ players }) {
                 </div>
             </div>
 
-            {/* Current over balls */}
-            {matchState.currentOverBalls.length > 0 && (
-                <div className="card">
-                    <div className="text-[10px] text-surface-500 font-medium mb-2">THIS OVER</div>
-                    <div className="flex gap-2 flex-wrap">
-                        {matchState.currentOverBalls.map((ball, i) => {
-                            let bgColor = 'bg-surface-700 border-surface-600 text-surface-300';
-                            if (ball === 'W') bgColor = 'bg-red-500/20 border-red-500/50 text-red-400';
-                            else if (ball === '4') bgColor = 'bg-blue-500/20 border-blue-500/50 text-blue-400';
-                            else if (ball === '6') bgColor = 'bg-primary-500/20 border-primary-500/50 text-primary-400';
-                            else if (ball === '•') bgColor = 'bg-surface-700 border-surface-600 text-surface-500';
-                            else if (ball.startsWith('WD') || ball.startsWith('NB'))
-                                bgColor = 'bg-amber-500/20 border-amber-500/50 text-amber-400';
-
-                            return (
-                                <div key={i} className={`ball-dot ${bgColor}`}>
-                                    {ball === '•' ? '·' : ball}
+            {/* Over balls history */}
+            <div className="space-y-3">
+                {(() => {
+                    const ballLog = matchState.ballLog || [];
+                    const currentOverIndex = Math.floor(matchState.balls / 6);
+                    const currentOverBalls = matchState.currentOverBalls || [];
+                    
+                    // Helper to render a single over row
+                    const renderOverRow = (overNum, balls, isActive = false) => {
+                        if (balls.length === 0) return null;
+                        
+                        return (
+                            <div key={overNum} className={`card ${isActive ? '' : 'bg-surface-900/40 border-dashed border-surface-800 opacity-80'}`}>
+                                <div className="text-[10px] text-surface-500 font-medium mb-2 uppercase tracking-tight">
+                                    Over {overNum} {isActive && <span className="text-primary-400 ml-1 ml-1.5">• LIVE</span>}
                                 </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+                                <div className="flex gap-2 flex-wrap">
+                                    {balls.map((ball, i) => {
+                                        let bgColor = isActive 
+                                            ? 'bg-surface-700 border-surface-600 text-surface-300'
+                                            : 'bg-surface-800 border-surface-700 text-surface-400';
+                                            
+                                        if (ball === 'W') bgColor = isActive ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-red-500/10 border-red-500/30 text-red-500/70';
+                                        else if (ball === '4') bgColor = isActive ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-500/70';
+                                        else if (ball === '6') bgColor = isActive ? 'bg-primary-500/20 border-primary-500/50 text-primary-400' : 'bg-primary-500/10 border-primary-500/30 text-primary-500/70';
+                                        else if (ball === '•') bgColor = isActive ? 'bg-surface-700 border-surface-600 text-surface-500' : 'bg-surface-800 border-surface-700 text-surface-600';
+                                        else if (ball.startsWith('WD') || ball.startsWith('NB'))
+                                            bgColor = isActive ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-500/70';
+
+                                        return (
+                                            <div key={i} className={`${isActive ? 'ball-dot' : 'w-6 h-6 rounded-full border flex items-center justify-center text-[10px] font-bold'} ${bgColor}`}>
+                                                {ball === '•' ? '·' : ball}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    };
+
+                    // Get completed overs from ballLog
+                    const completedOversMap = {};
+                    ballLog.filter(b => b.innings === matchState.innings && b.over < currentOverIndex)
+                           .forEach(b => {
+                               if (!completedOversMap[b.over]) completedOversMap[b.over] = [];
+                               completedOversMap[b.over].push(b.result);
+                           });
+                    
+                    const completedOverIndices = Object.keys(completedOversMap).map(Number).sort((a, b) => b - a);
+
+                    return (
+                        <>
+                            {/* Current Over */}
+                            {renderOverRow(currentOverIndex + 1, currentOverBalls, true)}
+                            
+                            {/* Previous Overs in descending order */}
+                            {completedOverIndices.map(overIdx => renderOverRow(overIdx + 1, completedOversMap[overIdx]))}
+                        </>
+                    );
+                })()}
+            </div>
         </div>
     );
 }

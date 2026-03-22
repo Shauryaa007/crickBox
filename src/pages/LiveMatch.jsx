@@ -5,6 +5,7 @@ import { useFirestore } from '../hooks/useFirestore';
 import { MatchProvider, useMatch } from '../context/MatchContext';
 import { createInitialState, createSecondInningsState, createSuperOverInningsState } from '../lib/matchEngine';
 import Scoreboard from '../components/scoring/Scoreboard';
+import FullScorecard from '../components/scoring/FullScorecard';
 import ScoringControls from '../components/scoring/ScoringControls';
 import CoinToss from '../components/match/CoinToss';
 import Modal from '../components/common/Modal';
@@ -27,6 +28,7 @@ function LiveMatchInner({ matchDoc, players, user }) {
     const [si_bowl, setSi_bowl] = useState('');
     const [soTossWinner, setSoTossWinner] = useState('');
     const [soTossDecision, setSoTossDecision] = useState('');
+    const [activeTab, setActiveTab] = useState('live');
     const statsUpdateAttempted = useRef(false);
 
     const getPlayerName = (pid) => {
@@ -222,17 +224,43 @@ function LiveMatchInner({ matchDoc, players, user }) {
                 </div>
             </div>
 
-            {/* Scoreboard */}
-            <Scoreboard players={players} />
+            {/* Tab navigation */}
+            <div className="flex gap-1 mb-4 bg-surface-900/50 backdrop-blur-sm sticky top-[48px] z-40 p-1 rounded-xl border border-surface-800">
+                {[
+                    { key: 'live', label: 'Live' },
+                    { key: 'scorecard', label: 'Scorecard' },
+                ].map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === tab.key
+                                ? 'bg-primary-600 text-white shadow-lg'
+                                : 'text-surface-400 hover:text-white'
+                            }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
-            {/* Scoring controls */}
-            {isAdmin && (
-                <div className="mt-3">
-                    <ScoringControls
-                        players={players}
-                        battingTeamPlayerIds={battingTeamPlayerIds}
-                    />
-                </div>
+            {/* Main Content */}
+            {activeTab === 'live' ? (
+                <>
+                    {/* Scoreboard */}
+                    <Scoreboard players={players} />
+
+                    {/* Scoring controls */}
+                    {isAdmin && (
+                        <div className="mt-3">
+                            <ScoringControls
+                                players={players}
+                                battingTeamPlayerIds={battingTeamPlayerIds}
+                            />
+                        </div>
+                    )}
+                </>
+            ) : (
+                <FullScorecard players={players} />
             )}
 
             {/* Innings Break Modal */}
